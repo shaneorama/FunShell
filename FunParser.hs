@@ -1,18 +1,19 @@
-module ShellParser where
+module FunParser where
 
 import System.IO
 import Control.Monad
+-- import Control.Applicative
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
 
-import ShellAST
+import FunAST
 
 languageDef = emptyDef {
   Token.identStart = letter,
   Token.identLetter = alphaNum,
-  Token.reservedOpNames = ["=", "|>"]
+  Token.reservedOpNames = ["$",".","=","|>"]
 }
 
 lexer = Token.makeTokenParser languageDef
@@ -23,25 +24,22 @@ reservedOp = Token.reservedOp lexer
 parens = Token.parens lexer
 whiteSpace = Token.whiteSpace lexer
 
+arg = liftM Literal stringLiteral <|>
+      liftM Id identifier
 
-arg = liftM Literal stringLiteral <|> liftM Id identifier
-param = liftM FromFunc funcCall <|> liftM FromInput stringLiteral
+statement = try funDef <|> funCall
 
-funcCall :: Parser FuncCall
-funcCall = do
-  name <- identifier
-  args <- many arg
-  return $ FuncCall name args
+funCall :: Parser Statement
+funCall = FunCall <$>
+  identifier <*>
+  many arg
 
-funcDef :: Parser FuncDef
-funcDef = do
-  name <- identifier
-  params <- many param
-  reservedOp "="
-  func <- funcCall
-  return $ FuncDef name params func
-
-statement = liftM Def funcDef <|> liftM Call funcCall
+funDef :: Parser Statement
+funDef = FunDef
+  <$> identifier
+  <*> many identifier
+  <* reservedOp "="
+  <*> many arg
 
 parseString str =
   case parse statement "" str of
